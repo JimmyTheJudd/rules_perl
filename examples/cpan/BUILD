@@ -16,7 +16,26 @@ package(default_visibility = ["//visibility:public"])
 
 load("//perl:perl.bzl", "perl_library")
 
+# Simple example with bad directory
 perl_library(
     name = "TestMockSimple",
-    srcs = ["Test-Mock-Simple-0.10/lib/Test/Mock/Simple.pm"],
+    srcs = [ "Test-Mock-Simple-0.10/lib/Test/Mock/Simple.pm" ],
+)
+
+# Better example of module placement with dependence
+perl_library(
+    name = "IOPty",
+    srcs = [ "IO/Pty.pm" ],
+)
+
+perl_library(
+    name = "IOTty",
+    srcs = [ "IO/Tty.pm" ],
+    data = [ "auto/IO/Tty/Tty.so", ],
+    deps = [ "IOPty", "IOTtyConstant", ],
+)
+
+perl_library(
+    name = "IOTtyConstant",
+    srcs = [ "IO/Tty/Constant.pm" ],
 )

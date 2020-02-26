@@ -12,28 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-package(default_visibility = ["//visibility:public"])
+# Include a module that is pure perl - no need to compile it
 
-load(
-    "//perl:perl.bzl",
-    "perl_test",
-)
+use strict;
+use warnings;
 
-perl_test(
-    name = "pure_perl",
-    srcs = ["pure_perl.t"],
-    env = {
-        "PERL5LIB": "examples/cpan/Test-Mock-Simple-0.10/lib",
-    },
-    deps = ["//examples/cpan:TestMockSimple"],
-)
+use Test::More tests => 1;
 
-perl_test(
-    name = "complex_deps",
-    srcs = ["complex_deps.t"],
-    data = ["auto/IO/Tty/Tty1.so"],
-    env = {
-        "PERL5LIB": "examples/cpan:examples/cpan/auto",
-    },
-    deps = ["//examples/cpan:IOTty"],
-)
+use_ok("IO::Tty");
