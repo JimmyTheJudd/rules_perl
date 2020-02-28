@@ -31,7 +31,6 @@ perl_test(
 perl_test(
     name = "complex_deps",
     srcs = ["complex_deps.t"],
-    data = ["auto/IO/Tty/Tty1.so"],
     env = {
         "PERL5LIB": "examples/cpan:examples/cpan/auto",
     },

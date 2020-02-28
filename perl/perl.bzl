@@ -19,6 +19,8 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_cc//cc:toolchain_utils.bzl", "find_cpp_toolchain")
 load("@rules_cc//cc:action_names.bzl", "C_COMPILE_ACTION_NAME")
 
+PerlLibrary = provider(fields=["transitive_perl_sources"]);
+
 PERL_XS_COPTS = [
     "-fwrapv",
     "-fPIC",
@@ -32,11 +34,12 @@ _perl_srcs_attr = attr.label_list(allow_files = _perl_file_types)
 
 _perl_deps_attr = attr.label_list(
     allow_files = False,
-    providers = ["transitive_perl_sources"],
+    providers = [PerlLibrary],
 )
 
 _perl_data_attr = attr.label_list(
     allow_files = True,
+    providers = [PerlLibrary],
 )
 
 _perl_main_attr = attr.label(
@@ -48,7 +51,7 @@ _perl_env_attr = attr.string_dict()
 def _collect_transitive_sources(ctx):
     return depset(
         ctx.files.srcs,
-        transitive = [dep.transitive_perl_sources for dep in ctx.attr.deps],
+        transitive = [dep[PerlLibrary].transitive_perl_sources for dep in ctx.attr.deps],
         order = "postorder",
     )
 
@@ -58,20 +61,64 @@ def _get_main_from_sources(ctx):
         fail("Cannot infer main from multiple 'srcs'. Please specify 'main' attribute.", "main")
     return sources[0]
 
+def _transitive_srcs(deps):
+  return struct(
+      srcs = [
+          d[PerlLibrary].transitive_perl_sources for d in deps if PerlLibrary in d
+      ],
+      data_files = [d[DefaultInfo].data_runfiles.files for d in deps],
+      default_files = [d[DefaultInfo].default_runfiles.files for d in deps],
+   )
+
+def transitive_deps(ctx, extra_files=[], extra_deps=[]):
+  """Calculates transitive sets of args.
+  Calculates the transitive sets for perl sources, data runfiles,
+  include flags and runtime flags from the srcs, data and deps attributes
+  in the context.
+  Also adds extra_deps to the roots of the traversal.
+  Args:
+    ctx: a ctx object for a perl_library or a perl_binary rule.
+    extra_files: a list of File objects to be added to the default_files
+    extra_deps: a list of Target objects.
+  """
+  deps = _transitive_srcs(ctx.attr.deps + extra_deps)
+  files = depset(extra_files + ctx.files.srcs)
+  default_files = ctx.runfiles(
+      files = files.to_list(),
+      transitive_files = depset(transitive = deps.default_files),
+      collect_default = True,
+  )
+  data_files = ctx.runfiles(
+      files = ctx.files.data,
+      transitive_files = depset(transitive = deps.data_files),
+      collect_data = True,
+  )
+  return struct(
+      srcs = depset(
+          direct = ctx.files.srcs,
+          transitive = deps.srcs,
+      ),
+      default_files = default_files,
+      data_files = data_files,
+  )
+
 def _perl_library_implementation(ctx):
-    transitive_sources = _collect_transitive_sources(ctx)
-    return struct(
-        runfiles = ctx.runfiles(collect_data = True),
-        transitive_perl_sources = transitive_sources,
-    )
+    transitive_sources = transitive_deps(ctx)
+    return [
+        DefaultInfo(
+            default_runfiles = transitive_sources.default_files,
+            data_runfiles = transitive_sources.data_files,
+        ),
+        PerlLibrary(
+            transitive_perl_sources = transitive_sources.srcs,
+        ),
+    ]
 
 def _perl_binary_implementation(ctx):
     toolchain = ctx.toolchains["@io_bazel_rules_perl//:toolchain_type"].perl_runtime
     interpreter = toolchain.interpreter
 
-    toolchain_files = depset(toolchain.runtime)
-    transitive_sources = _collect_transitive_sources(ctx)
-    trans_runfiles = [toolchain_files, transitive_sources]
+    transitive_sources = transitive_deps(ctx, extra_files = toolchain.runtime + [ ctx.outputs.executable ])
 
     main = ctx.file.main
     if main == None:
@@ -90,10 +137,9 @@ def _perl_binary_implementation(ctx):
     )
 
     return DefaultInfo(
-        files = depset([ctx.outputs.executable]),
-        runfiles = ctx.runfiles(
-            transitive_files = depset([ctx.outputs.executable], transitive = trans_runfiles),
-        ),
+        executable = ctx.outputs.executable,
+        default_runfiles = transitive_sources.default_files,
+        data_runfiles = transitive_sources.data_files,
     )
 
 def _env_vars(ctx):
@@ -106,7 +152,6 @@ def _env_vars(ctx):
             value = value.replace("'", "\\'"),
         )
     return environment
-
 
 def _is_identifier(name):
     # Must be non-empty.
