@@ -14,21 +14,26 @@
 
 package(default_visibility = ["//visibility:public"])
 
-load("//perl:perl.bzl", "perl_library")
+load("@io_bazel_rules_perl//perl:perl.bzl", "perl_xs")
 
-# Simple example with bad directory
-perl_library(
-    name = "TestMockSimple",
-    srcs = [ "Test-Mock-Simple-0.10/lib/Test/Mock/Simple.pm" ],
-)
-
-perl_library(
-    name = "IOTty",
-    srcs = [
-        "IO/Tty.pm",
-        "IO/Pty.pm",
-        "IO/Tty/Constant.pm",
-        "//examples/cpan/auto/IO/Tty:Tty",
+perl_xs(
+    name = "Tty",
+    srcs = ["Tty.xs",],
+    textual_hdrs = ["xssubs.c",],
+    defines = [
+        "HAVE_DEV_PTMX",
+        "HAVE_GETPT",
+        "HAVE_GRANTPT",
+        "HAVE_POSIX_OPENPT",
+        "HAVE_PTSNAME",
+        "HAVE_PTSNAME_R",
+        "HAVE_PTY_H",
+        "HAVE_SIGACTION",
+        "HAVE_SYS_STROPTS_H",
+        "HAVE_TERMIOS_H",
+        "HAVE_TERMIO_H",
+        "HAVE_TTYNAME",
+        "HAVE_UNLOCKP",
     ],
 )
 
